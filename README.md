@@ -14,10 +14,17 @@ acceleration.
 This Analyzer provides a "Start"/"Stop" buttons to start/stop the analysis.
 
 When stopped, the app displays the result of the analysis.
+
 Good - Less than 200 vibration events detected
+
 Pass - Between 200 to 500 vibration events detected
+
 Poor - More than500 vibration events detected
 
+
 Pressing "Stop" again, resets the analysis and clears the app for the next
-analysis session.
+analysis session. If connected to pc, the reset function also sends some
+details of analysis thru the serial interface at 9600 baud.
+
+PS: The serial interface was chosen as BLE loses connectivity with phone inside a tennis court.
 

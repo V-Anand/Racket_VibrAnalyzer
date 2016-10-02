@@ -103,6 +103,10 @@ void AccelIntCallback() {
     accelReady = 1;
 }
 
+void ClearResult() {
+    oled.DrawBox(5,58,30,18,COLOR_WHITE);
+}
+
 void DisplayResult() {
     char text[8];
 
@@ -212,7 +216,10 @@ int main() {
             cntVib=0;
             maxVib=0;
             minVib=0;
+
             flag = T_APP_READY;
+
+            ClearResult();
         }
 
         Thread::wait(50);
