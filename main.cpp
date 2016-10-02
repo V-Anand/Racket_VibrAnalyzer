@@ -21,6 +21,14 @@
 void StartHaptic(void);
 void StopHaptic(void const *n);
 
+typedef enum {
+    T_APP_UNKNOWN,
+    T_APP_READY,
+    T_APP_STARTED,
+    T_APP_STOPPED,
+    T_APP_RESET
+} RacketAppState_t;
+
 /* Instantiate the RGB LED and Haptic motor pinout */
 DigitalOut redLed(LED1);
 DigitalOut greenLed(LED2);
@@ -49,30 +57,32 @@ SRAWDATA accelData;
 
 int accelReady=0;
 
-int flag=0;
+RacketAppState_t flag=T_APP_READY;
 
 uint32_t cntVib=0, maxVib=0, minVib=0xffffffff;
 
 void ButtonLeft(void)
 {
+    flag = (T_APP_READY == flag) ? T_APP_STARTED : flag;
+
     StartHaptic();
-    
+
     redLed      = LED_ON;
     greenLed    = LED_ON;
     blueLed     = LED_OFF;
-    
-    flag = 1;
 }
 
 void ButtonRight(void)
 {
+    flag = (T_APP_STARTED == flag) 
+           ? T_APP_STOPPED 
+           : (T_APP_STOPPED == flag) ? T_APP_RESET : flag;
+
     StartHaptic();
     
     redLed      = LED_ON;
     greenLed    = LED_OFF;
     blueLed     = LED_OFF;    
-    
-    flag = 2;
 }
 
 void StartHaptic(void)
@@ -94,21 +104,30 @@ void AccelIntCallback() {
 }
 
 void DisplayResult() {
-    char text[15];
+    char text[8];
 
     oled_text_properties_t textProps={0};
     oled.GetTextProperties(&textProps);
-    textProps.fontColor = COLOR_GREEN;
+
+    if (100 >= cntVib)
+    {
+        textProps.fontColor = COLOR_GREEN;
+        sprintf(text, "Good"); 
+    }
+    else if (500 >= cntVib)
+    {
+        textProps.fontColor = COLOR_YELLOW;
+        sprintf(text, "Pass"); 
+    }
+    else
+    {
+        textProps.fontColor = COLOR_RED;
+        sprintf(text, "Poor"); 
+    }
+
     oled.SetTextProperties(&textProps);
 
-    sprintf(text, "TOT=%08x", cntVib); 
-    oled.Label((uint8_t*) text, 5, 48);
-
-    sprintf(text, "MAX=%08x", maxVib); 
-    oled.Label((uint8_t*) text, 5, 60);
-
-    sprintf(text, "MIN=%08x", minVib);
-    oled.Label((uint8_t*) text, 5, 72);
+    oled.Label((uint8_t*) text, 5, 58);
 }
 
 int main() {
@@ -154,7 +173,7 @@ int main() {
     
     while (true) 
     {
-        if (flag == 1) 
+        if (T_APP_STARTED == flag) 
         {
             if (accelReady == 1)
             {
@@ -180,13 +199,22 @@ int main() {
                   }
                 }
             }
-
         }
-        else if (flag == 2)
+        else if (T_APP_STOPPED == flag)
+        {
+            DisplayResult();
+        }
+        else if (T_APP_RESET == flag)
         {
             pc.printf("Count=%X Min=%X Max=%X\n",
                       cntVib, minVib, maxVib);
+
+            cntVib=0;
+            maxVib=0;
+            minVib=0;
+            flag = T_APP_READY;
         }
+
         Thread::wait(50);
     }
 }
