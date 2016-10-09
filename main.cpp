@@ -10,13 +10,15 @@
 
 #include "mbed.h"
 #include "Hexi_OLED_SSD1351.h"
-#include "images.h"
 #include "tennis.h"
 #include "Hexi_KW40Z.h"
 #include "FXOS8700CQ.h"
 
 #define LED_ON      0
 #define LED_OFF     1
+#define MAX_WIDTH   96
+#define MAX_HEIGHT  96
+#define MAX_VIBS    96
    
 void StartHaptic(void);
 void StopHaptic(void const *n);
@@ -26,6 +28,7 @@ typedef enum {
     T_APP_READY,
     T_APP_STARTED,
     T_APP_STOPPED,
+    T_APP_RESET_WAIT,
     T_APP_RESET
 } RacketAppState_t;
 
@@ -59,7 +62,9 @@ int accelReady=0;
 
 RacketAppState_t flag=T_APP_READY;
 
-uint32_t cntVib=0, maxVib=0, minVib=0xffffffff;
+uint32_t cntVib=0;
+
+float vibs[MAX_VIBS] = {0.0};
 
 void ButtonLeft(void)
 {
@@ -76,7 +81,7 @@ void ButtonRight(void)
 {
     flag = (T_APP_STARTED == flag) 
            ? T_APP_STOPPED 
-           : (T_APP_STOPPED == flag) ? T_APP_RESET : flag;
+           : (T_APP_RESET_WAIT == flag) ? T_APP_RESET : flag;
 
     StartHaptic();
     
@@ -103,35 +108,60 @@ void AccelIntCallback() {
     accelReady = 1;
 }
 
-void ClearResult() {
-    oled.DrawBox(5,58,30,18,COLOR_WHITE);
+void DisplayStarted() {
+    oled.DrawBox(84,6,8,8,COLOR_RED);
 }
 
 void DisplayResult() {
-    char text[8];
+    char text[15];
+
+    /* Fill screen with black */
+    oled.FillScreen(COLOR_BLACK);
+
+    uint8_t size = (cntVib > MAX_VIBS) ? MAX_VIBS : cntVib;
+    uint8_t idx = (cntVib > MAX_VIBS) ? (cntVib % MAX_VIBS) : 0;
+    float total = 0.0;
+    for(uint8_t x=0; x < size; ++x, ++idx) {
+      total += vibs[ idx % MAX_VIBS];
+      
+      float vib = log2( vibs[ idx % MAX_VIBS ] );
+      uint8_t y = (vib >= MAX_VIBS) ? (MAX_VIBS - 1) : (uint8_t)(vib+0.5);
+      oled.DrawPixel(x, y, COLOR_YELLOW);
+    }
 
     oled_text_properties_t textProps={0};
     oled.GetTextProperties(&textProps);
-
-    if (100 >= cntVib)
-    {
-        textProps.fontColor = COLOR_GREEN;
-        sprintf(text, "Good"); 
-    }
-    else if (500 >= cntVib)
-    {
-        textProps.fontColor = COLOR_YELLOW;
-        sprintf(text, "Pass"); 
-    }
-    else
-    {
-        textProps.fontColor = COLOR_RED;
-        sprintf(text, "Poor"); 
-    }
-
+    textProps.fontColor = COLOR_GREEN;
+    sprintf(text, "Avg:%.2f", (total/size)); 
     oled.SetTextProperties(&textProps);
+    oled.Label((uint8_t*) text, 20, 50);
+}
+void DisplayImage() {
+    /* Pointer for the image to be displayed  */  
+    const uint8_t *image1;
 
-    oled.Label((uint8_t*) text, 5, 58);
+    /* Setting pointer location of the 96 by 96 pixel bitmap */
+    image1  = tennis_app_image2;
+
+    /* Fill screen with black */
+    oled.FillScreen(COLOR_BLACK);
+        
+    oled.DrawImage(image1,0,0);
+}
+uint16_t GetMagn(uint16_t value) {
+    bool const isNeg = ((value & (1<<15)) != 0);
+    if (isNeg) {
+      return (~value + 1);
+    }
+    return value;
+}
+void PrintResult() {
+    pc.printf("Count=%X \n", cntVib );
+    uint8_t size = (cntVib > MAX_VIBS) ? MAX_VIBS : cntVib;
+    uint16_t idx = (cntVib > MAX_VIBS) ? (cntVib % MAX_VIBS) : 0;
+    for(uint16_t i=0;i < size; ++i, ++idx) {
+      pc.printf("%.2f \n", log2(vibs[ idx % MAX_VIBS]));
+    }
 }
 
 int main() {
@@ -144,16 +174,6 @@ int main() {
     greenLed    = LED_OFF;
     blueLed     = LED_OFF;
     
-    /* Pointer for the image to be displayed  */  
-    const uint8_t *image1;
-    const uint8_t *image2;
-    const uint8_t *image3;
-
-    /* Setting pointer location of the 96 by 96 pixel bitmap */
-    image1  = /*Relay_OFF*/ tennis_app_image2;
-    image2  = Button_OFF;
-    image3  = Button_ON;
-
     /* Accel Int setup */
     accelIntPin.mode(PullUp);
     
@@ -167,10 +187,7 @@ int main() {
     kw40z_device.attach_buttonLeft(&ButtonLeft);
     kw40z_device.attach_buttonRight(&ButtonRight);
 
-    /* Fill screen with black */
-    oled.FillScreen(COLOR_BLACK);
-        
-    oled.DrawImage(image1,0,0);
+    DisplayImage();
 
     /* Accel data enable */
     fxos.enable_trans_accel();
@@ -182,46 +199,37 @@ int main() {
             if (accelReady == 1)
             {
                 accelReady = 0;
-
-                ++cntVib;
-
                 if (I2C_SUCCESS == fxos.read_accel(&accelData))
                 {
                   /* Get Vector magnitude of each axis */
-                  uint16_t xAxis = (accelData.x & 0x7fff);
-                  uint16_t yAxis = (accelData.y & 0x7fff);
-                  uint16_t zAxis = (accelData.z & 0x7fff);
-                  /* Magnitude rounded-up */
-                  uint32_t accMag = (uint32_t)(0.5 + ((xAxis*xAxis) + 
-                                      (yAxis*yAxis) + (zAxis*zAxis)));
-                  /* Update Min and Max Vibration */
-                  if (accMag > maxVib) {
-                    maxVib = accMag;
-                  }
-                  if (accMag < minVib) {
-                    minVib = accMag;
-                  }
+                  uint16_t xAxis = GetMagn(accelData.x);
+                  uint16_t yAxis = GetMagn(accelData.y);
+                  uint16_t zAxis = GetMagn(accelData.z);
+                  /* RMS acceleration */
+                  /* Plot Vibration for Analysis */
+                  vibs[cntVib % MAX_VIBS] = sqrt(
+                    ((xAxis*xAxis) + (yAxis*yAxis) + (zAxis*zAxis))/3);
+                  ++cntVib;
                 }
             }
+            DisplayStarted();
         }
         else if (T_APP_STOPPED == flag)
         {
             DisplayResult();
+
+            flag = T_APP_RESET_WAIT;
         }
         else if (T_APP_RESET == flag)
         {
-            pc.printf("Count=%X Min=%X Max=%X\n",
-                      cntVib, minVib, maxVib);
+            PrintResult();
 
             cntVib=0;
-            maxVib=0;
-            minVib=0;
 
             flag = T_APP_READY;
 
-            ClearResult();
+            DisplayImage();
         }
-
         Thread::wait(50);
     }
 }
