@@ -31,10 +31,15 @@ These instructions that "ARM mbed CLI" is available.
 Clone the project.
 
 cd project-folder
+
 mbed deploy
+
 mbed toolchain GCC_ARM
+
 mbed target hexiwear
+
 mbed compile
+
 
 Copy .bin file created to hexiwear over the "DAPLINK".
 

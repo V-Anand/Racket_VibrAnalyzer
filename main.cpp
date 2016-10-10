@@ -160,7 +160,7 @@ void DisplayImage() {
 uint16_t GetMagn(uint16_t value) {
     bool const isNeg = ((value & (1<<13)) != 0);
     if (isNeg) {
-      return (~value + 1);
+      return ~(value & 0x3fff) + 1;
     }
     return value;
 }
@@ -169,7 +169,7 @@ void PrintResult() {
     uint8_t size = (cntVib > MAX_VIBS) ? MAX_VIBS : cntVib;
     uint16_t idx = (cntVib > MAX_VIBS) ? (cntVib % MAX_VIBS) : 0;
     for(uint16_t i=0;i < size; ++i, ++idx) {
-      pc.printf("%.2f \n", log2(vibs[ idx % MAX_VIBS]));
+      pc.printf("%.2f \n", vibs[ idx % MAX_VIBS]);
     }
 }
 
@@ -211,13 +211,14 @@ int main() {
                 if (I2C_SUCCESS == fxos.read_accel(&accelData))
                 {
                   /* Get Vector magnitude of each axis */
-                  uint16_t xAxis = GetMagn(accelData.x);
-                  uint16_t yAxis = GetMagn(accelData.y);
-                  uint16_t zAxis = GetMagn(accelData.z);
+                  /* Sensitivity = +/- 2g ~ 0.244mg/LSB */
+                  float xAxis = 0.244 * GetMagn(accelData.x);
+                  float yAxis = 0.244 * GetMagn(accelData.y);
+                  float zAxis = 0.244 * GetMagn(accelData.z);
                   /* RMS acceleration */
                   /* Plot Vibration for Analysis */
                   vibs[cntVib % MAX_VIBS] = sqrt(
-                    ((xAxis*xAxis) + (yAxis*yAxis) + (zAxis*zAxis))/3);
+                    ((xAxis*xAxis) + (yAxis*yAxis) + (zAxis*zAxis))/3.0);
                   ++cntVib;
                 }
             }
