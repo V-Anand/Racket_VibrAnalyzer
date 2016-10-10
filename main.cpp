@@ -160,7 +160,7 @@ void DisplayImage() {
 uint16_t GetMagn(uint16_t value) {
     bool const isNeg = ((value & (1<<13)) != 0);
     if (isNeg) {
-      return ~(value & 0x3fff) + 1;
+      return ((~value) & 0x3fff) + 1;
     }
     return value;
 }
