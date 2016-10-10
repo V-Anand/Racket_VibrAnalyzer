@@ -112,6 +112,13 @@ void DisplayStarted() {
     oled.DrawBox(84,6,8,8,COLOR_RED);
 }
 
+void DrawBarLine(uint8_t x, uint8_t y) {
+      uint8_t yi = 0;
+      while(yi <= y) {
+          oled.DrawPixel(x, yi++, COLOR_YELLOW);
+      }
+}
+
 void DisplayResult() {
     char text[15];
 
@@ -126,7 +133,7 @@ void DisplayResult() {
       
       float vib = log2( vibs[ idx % MAX_VIBS ] );
       uint8_t y = (vib >= MAX_VIBS) ? (MAX_VIBS - 1) : (uint8_t)(vib+0.5);
-      oled.DrawPixel(x, y, COLOR_YELLOW);
+      DrawBarLine(x,y);
     }
 
     oled_text_properties_t textProps={0};
@@ -134,7 +141,7 @@ void DisplayResult() {
     textProps.fontColor = COLOR_GREEN;
     sprintf(text, "Avg:%.2f", (total/size)); 
     oled.SetTextProperties(&textProps);
-    oled.Label((uint8_t*) text, 20, 50);
+    oled.Label((uint8_t*) text, 15, 69);
 }
 void DisplayImage() {
     /* Pointer for the image to be displayed  */  
@@ -148,8 +155,10 @@ void DisplayImage() {
         
     oled.DrawImage(image1,0,0);
 }
+/* 14-bit accelerator axis data */
+/* left-justified 2's complement numbers */
 uint16_t GetMagn(uint16_t value) {
-    bool const isNeg = ((value & (1<<15)) != 0);
+    bool const isNeg = ((value & (1<<13)) != 0);
     if (isNeg) {
       return (~value + 1);
     }
